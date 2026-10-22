@@ -16,7 +16,9 @@ A custom role, **"Storage Read and List Operator,"** granting:
 - `Microsoft.Resources/subscriptions/resourceGroups/read`
 - Data action: `Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read`
 
-No write, delete, or account-key-listing permissions were included — by design.
+No write or delete permissions were included.
+
+> **Correction (found on review):** The role *does* include `listKeys/action`. That was a mistake for a least-privilege role: the account key gives full read/write access to all data in the storage account, which bypasses the narrow `blobs/read` data action entirely. The fix is to remove `listKeys/action` and rely only on the data action with Entra ID (Azure AD) authentication. See Next Steps.
 
 ## Steps
 
@@ -44,20 +46,21 @@ Access Control (IAM) on the storage account confirms the assignment took effect,
 
 ### 4. Verify from the assigned user's session
 
-Signed in as the test user directly (not the admin account) and attempted to browse the storage account via Storage Browser, which relies on account-key-based listing — an action outside the custom role's scope. The attempt was correctly denied, confirming the user has **no implicit access beyond what was explicitly granted** in the custom role.
+Signed in as the test user directly (not the admin account) and opened the storage account in Storage Browser. The portal showed an authorization error: the user was not allowed to perform `Microsoft.Storage/storageAccounts/blobServices/read`. That action was not in the custom role, so the denial confirms Azure only allowed what was explicitly granted.
 
 ![Access denied error from the test user's session](Screenshot%202026-08-27%20163548.png)
 
-> **Note on scope:** This denial confirms the absence of broader, ungranted access (account-key-based listing). It does not by itself demonstrate the specific `blobs/read` data action succeeding — that would require a follow-up test using Azure AD auth mode against a known blob path (e.g., `az storage blob download --auth-mode login`), which is a planned next step for this lab.
+> **Note on scope:** This test shows an ungranted action being denied. It does not prove the granted `blobs/read` data action succeeds. That needs a follow-up test with Entra ID auth against a known blob path (for example, `az storage blob download --auth-mode login`), which is a planned next step.
 
 ## What This Demonstrates
 
 - Authoring least-privilege RBAC roles as code (JSON + CLI) rather than manual portal configuration
-- Correctly scoping a custom role to only the actions required
+- Scoping a custom role to specific actions, and reviewing it afterward to catch an over-broad permission (`listKeys`)
 - Validating an assignment from the assigned identity's own session, not just from an admin's view
 - Reading and interpreting Azure authorization error messages to confirm enforcement
 
 ## Next Steps
 
+- Remove `listKeys/action` from the role definition so access depends only on the `blobs/read` data action
 - Verify the granted `blobs/read` data action succeeds via Azure AD auth mode CLI calls
 - Reproduce the role definition and assignment in Terraform for full IaC parity with other projects in this portfolio
